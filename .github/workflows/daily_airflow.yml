@@ -59,7 +59,6 @@ jobs:
         run: python src/validate_clean.py
 
       - name: Load into data warehouse
-        if: false 
         env:
           DB_HOST: ${{ vars.DB_HOST }}
           DB_PORT: ${{ vars.DB_PORT }}
