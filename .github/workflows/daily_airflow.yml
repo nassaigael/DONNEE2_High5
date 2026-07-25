@@ -11,7 +11,7 @@ on:
 jobs:
   run-pipeline:
     runs-on: ubuntu-22.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     permissions:
       contents: write 
 
@@ -49,7 +49,7 @@ jobs:
         env:
           OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
         run: |
-          python src/backfill.py --months 12
+          python src/backfill.py --months 3
           date +%Y-%m-%d > last_backfill_date.txt
 
       - name: Clean and normalize data
