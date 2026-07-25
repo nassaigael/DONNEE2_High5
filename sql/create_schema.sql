@@ -20,12 +20,9 @@ CREATE TABLE IF NOT EXISTS dim_time (
 
 CREATE TABLE IF NOT EXISTS fact_air_quality (
     fact_id SERIAL PRIMARY KEY,
-
     city_id INTEGER REFERENCES dim_city(city_id),
     time_id INTEGER REFERENCES dim_time(time_id),
-
     aqi INTEGER,
-
     co DOUBLE PRECISION,
     no DOUBLE PRECISION,
     no2 DOUBLE PRECISION,
@@ -37,4 +34,4 @@ CREATE TABLE IF NOT EXISTS fact_air_quality (
 );
 
 ALTER TABLE fact_air_quality
-ADD CONSTRAINT uq_fact UNIQUE(city_id,time_id);
+ADD CONSTRAINT uq_fact UNIQUE(city_id, time_id);
