@@ -1,407 +1,302 @@
-# DONNEE2_High5 – Pipeline ETL Continu d'Air Quality Index (AQI)
+# 🌍 DONNEE2_High5 – Pipeline de Qualité de l’Air (AQI)
 
-## Présentation du Projet
+## Descriptions
 
-**DONNEE2_High5** est un pipeline ETL entièrement automatisé et serverless qui collecte, nettoie, valide et charge dans un data warehouse des données de **qualité de l'air (AQI)** en temps réel depuis l'API OpenWeather Air Pollution.
+**DONNEE2_High5** est un pipeline ETL **100 % automatisé et serverless** qui collecte, nettoie, valide et livre en continu des données de qualité de l’air (Air Quality Index – AQI) pour **5 grandes villes mondiales**.  
+Il fournit un flux de données **fiable, traçable et prêt à l’emploi** pour des analyses statistiques, des tableaux de bord ou des modèles de machine learning (notamment pour le module IA1 qui consommera ces données en temps réel).
 
-Le projet répond au cahier des charges du cours :
-- ✅ Ingestion **horaire automatisée** pour 5 grandes villes mondiales
-- ✅ Stockage brut **immuable** (source de vérité)
-- ✅ Fichier propre **unique et déterministe** (reconstruction à chaque exécution)
-- ✅ **Modélisation en étoile** (fact + 2 dimensions)
-- ✅ **Exécution continue** post-rendu via GitHub Actions
-- ✅ **Notifications** d'alerte par email
+**Valeur ajoutée** :
+- 🔁 **Historique complet** : 3 mois de données (et en croissance) disponibles pour des études rétrospectives.
+- 🧹 **Qualité garantie** : dédoublonnage, validation stricte, valeurs manquantes conservées (pas d’imputation arbitraire).
+- 🗄️ **Modélisation dimensionnelle** : schéma en étoile prêt pour des requêtes analytiques complexes.
+- 📡 **Disponibilité permanente** : le pipeline tourne 24h/24, 7j/7, sans intervention.
 
-**Architecture** : Entièrement **serverless** via GitHub Actions + PostgreSQL cloud (Neon). Aucune infrastructure à maintenir.
+## Aperçu du pipeline
 
-**Data warehouse** : Accessible en permanence pour les requêtes du cours IA1.
+Le flux de données s’articule en quatre étapes, orchestrées automatiquement toutes les heures via GitHub Actions :
 
----
+![alt text](<Screenshot From 2026-07-28 00-34-15.png>)
 
-## 🌍 Villes Surveillées
+1. **Extraction** – `collect.py`  
+   Interroge l’API OpenWeather Air Pollution pour chaque ville et enregistre la réponse brute (JSON) dans le dossier `raw/`. Un backfill quotidien (`backfill.py`) comble les trous historiques.
 
-| # | Ville          | Pays            | Code | Latitude  | Longitude |
-|---|---|---|---|---|---|
-| 1 | Antananarivo   | Madagascar      | MG  | -18.8792  | 47.5079   |
-| 2 | Paris          | France          | FR  | 48.8566   | 2.3522    |
-| 3 | Nairobi        | Kenya           | KE  | -1.2921   | 36.8219   |
-| 4 | New York       | États-Unis      | US  | 40.7128   | -74.0060  |
-| 5 | Tokyo          | Japon           | JP  | 35.6762   | 139.6503  |
+2. **Nettoyage** – `clean.py`  
+   Lit tous les fichiers `raw/`, extrait les mesures, dédoublonne (une ligne par ville/heure), calcule des attributs temporels (date, jour, week-end) et produit un fichier CSV unique dans `clean/`.
 
-### Critères de Sélection
-Les 5 villes ont été choisies pour représenter :
-- **Diversité géographique** : Afrique, Europe, Asie, Amérique du Nord
-- **Diversité climatique** : Tropical (Antananarivo), tempéré (Paris, Tokyo, New York), subtropical (Nairobi)
-- **Pollution variée** : Mégapoles industrielles (Tokyo, New York, Paris) vs émergent (Antananarivo, Nairobi)
-- **Relevance scientifique** : Cas d'étude pour modèles de qualité de l'air et impacts climatiques
+3. **Validation** – `validate_clean.py`  
+   Vérifie rigoureusement le schéma, l’absence de doublons, le tri, les plages de valeurs, etc. Si la validation échoue, le chargement en base est bloqué.
+
+4. **Chargement** – `load_warehouse.py`  
+   Alimente une base PostgreSQL (Neon) selon un schéma en étoile : dimensions `dim_city` et `dim_time`, table de faits `fact_air_quality`.
+
+Chaque étape est traçable (logs dans GitHub Actions) et le pipeline envoie une notification par email en cas de succès ou d’échec.
+
+![alt text](<Screenshot From 2026-07-27 23-46-20.png>)
 
 ---
 
-## 📊 Format du Fichier `clean/air_quality_clean.csv`
+## 🏙️ Villes surveillées
 
-Le fichier propre est l'artefact central du projet : une ligne par **ville et par heure**, sans doublons, trié par ville puis par date/heure croissante.
+Cinq villes sélectionnées pour leur diversité géographique, climatique et de niveau de pollution.
 
-### Colonnes et Unités
-
-| # | Colonne           | Type    | Unité       | Description | Exemple |
-|---|---|---|---|---|---|
-| 1 | `ville` | TEXT | — | Nom de la ville | "Antananarivo" |
-| 2 | `pays` | TEXT | — | Code pays ISO 3166-1 (2 lettres) | "MG" |
-| 3 | `latitude` | FLOAT | degrés | Latitude géographique | -18.8792 |
-| 4 | `longitude` | FLOAT | degrés | Longitude géographique | 47.5079 |
-| 5 | `timestamp_utc` | TEXT | ISO 8601 | Horodatage UTC (format : YYYY-MM-DDTHH:MM:SSZ) | "2026-07-29T16:00:00Z" |
-| 6 | `date` | TEXT | YYYY-MM-DD | Date seule | "2026-07-29" |
-| 7 | `heure` | INT | [0, 23] | Heure du jour (UTC) | 16 |
-| 8 | `jour_semaine` | TEXT | — | Jour de la semaine en anglais | "Tuesday" |
-| 9 | `is_weekend` | BOOL | — | True si samedi ou dimanche | False |
-| 10 | `aqi` | INT | indice [1–5] | **Air Quality Index** (OpenWeather) : 1=Bon, 5=Très mauvais | 1 |
-| 11 | `co` | FLOAT | μg/m³ | **Monoxyde de carbone** | 77.99 |
-| 12 | `no` | FLOAT | μg/m³ | **Monoxyde d'azote** (NO) | 0.00 |
-| 13 | `no2` | FLOAT | μg/m³ | **Dioxyde d'azote** (NO₂) | 0.35 |
-| 14 | `o3` | FLOAT | μg/m³ | **Ozone** (O₃) | 55.01 |
-| 15 | `so2` | FLOAT | μg/m³ | **Dioxyde de soufre** (SO₂) | 0.15 |
-| 16 | `pm2_5` | FLOAT | μg/m³ | **Particules fines** (PM2.5) ≤ 2.5 micrometres | 1.33 |
-| 17 | `pm10` | FLOAT | μg/m³ | **Particules** ≤ 10 micrometres | 2.20 |
-| 18 | `nh3` | FLOAT | μg/m³ | **Ammoniac** (NH₃) | 0.34 |
-
-### Conventions
-
-- **Valeurs manquantes** : Cellules vides (pas de 0 inventé, pas de `NULL` textuel)
-- **Séparateur** : Virgule `,` (pas de points-virgule)
-- **Encodage** : UTF-8 sans BOM
-- **Ordre des colonnes** : Strict (18 colonnes dans cet ordre, pas plus, pas moins)
-- **Tri** : Alphabétique par ville, puis chronologique (timestamp_utc croissant)
-
----
-
-## 📅 Période Couverte
-
-| Aspect | Valeur |
-|---|---|
-| **Date de début** | 26 avril 2026 (04:00 UTC) |
-| **Date de fin** | 24 juillet 2026 (17:00 UTC) — en cours |
-| **Durée approximative** | 90 jours (~2160 heures) |
-| **Fréquence de collecte** | Horaire (un appel API par ville chaque heure) |
-| **Résolution temporelle** | Heure UTC (granularité minimale) |
-| **Total attendu** | ~10,800 mesures (5 villes × 24 heures × 90 jours) |
-| **Nombre de lignes dans clean/** | **42,083 lignes** (2026-07-29 dernier commit) |
-
-### Évolution Temporelle
-
-```
-2026-04-26T04:00:00Z  ◄─ Lancement initial (collect.py)
-    ↓
-2026-04-26T23:00:00Z  ◄─ Fin du premier jour
-    ↓
-2026-04-27T00:00:00Z  ◄─ Backfill historique lancé (1x/jour)
-    ↓
-2026-07-24T17:00:00Z  ◄─ Dernier commit observé (data: automated collection)
-    ↓
-2026-07-28T23:59:59Z  ◄─ Aujourd'hui (en cours)
-```
-
----
-
-## 🕳️ Trous Connus et Données Manquantes
-
-### Trous Horaires Identifiés
-
-| Ville | Heures manquantes | Raison probable | Impact |
-|---|---|---|---|
-| **Antananarivo** | ~22h (26–27 avril) | Absence de données historiques dans les backfill initiaux | Minimal (début du projet) |
-| **Paris** | ~8h (dispersées) | Indisponibilité temporaire API OpenWeather | < 1% |
-| **Nairobi** | ~15h (dispersées) | Arrêt du pipeline ~ 1 jour | ~0.7% |
-| **New York** | ~5h (dispersées) | Erreurs réseau ponctuelles | < 0.3% |
-| **Tokyo** | ~5h (dispersées) | Erreurs réseau ponctuelles | < 0.3% |
-
-### Valeurs Manquantes par Colonne
-
-| Colonne | # Vides | % Vides | Raison |
-|---|---|---|---|
-| `nh3` | ~250 | 0.6% | Ammoniac non rapporté par l'API pour certaines heures |
-| `co` | ~12 | 0.03% | Très rare, erreur API ponctuelles |
-| Autres | 0 | 0% | Collecte complète |
-
-### Recommandations pour l'Analyse
-
-1. **Imutation** : Pour les analyses de tendance, imputer les valeurs manquantes (forward-fill, moyenne mobile)
-2. **Filtrage** : Pour les analyses statiques, exclure les lignes avec colonnes manquantes critiques (optionnel)
-3. **Validation** : Les trous ne remettent pas en cause la validité des données adjacentes
-
----
-
-## 🗄️ Data Warehouse – Schéma et Connexion
-
-### Architecture du Warehouse
-
-Le warehouse suit un **schéma en étoile (Kimball)** avec une table de faits et deux dimensions :
-
-![alt text](<Screenshot From 2026-07-27 23-47-44.png>)
-
-```
-
-### Table dim_city
-
-Dimension des villes (petite table, ~5 lignes).
-
-```sql
-CREATE TABLE IF NOT EXISTS dim_city (
-    city_id SERIAL PRIMARY KEY,
-    city_name VARCHAR(100) UNIQUE NOT NULL,
-    country VARCHAR(100),
-    latitude DOUBLE PRECISION,
-    longitude DOUBLE PRECISION
-);
-```
-
-**Exemples de lignes** :
 ![alt text](<Screenshot From 2026-07-28 00-06-51.png>)
 
-### Table dim_time
+---
 
-Dimension temporelle (une ligne par heure unique collectée, ~10,800 lignes).
+## 📄 Colonnes et unités – `clean/air_quality_clean.csv`
 
-```sql
-CREATE TABLE IF NOT EXISTS dim_time (
-    time_id SERIAL PRIMARY KEY,
-    timestamp_hour TIMESTAMP UNIQUE NOT NULL,
-    date_value DATE,
-    year INTEGER,
-    month INTEGER,
-    day INTEGER,
-    hour INTEGER,
-    day_of_week VARCHAR(20),
-    is_weekend BOOLEAN
-);
-```
+Le fichier final est trié par ville, puis par `timestamp_utc` croissant.  
+Chaque ligne représente une mesure horaire unique.
 
-**Exemples de lignes** :
-![alt text](<Screenshot From 2026-07-28 00-07-47.png>)
-```
+| Colonne | Type | Unité | Description |
+|---------|------|-------|-------------|
+| `ville` | TEXT | — | Nom de la ville |
+| `pays` | TEXT | — | Code ISO 3166‑1 (2 lettres) |
+| `latitude` | FLOAT | degrés | Latitude géographique |
+| `longitude` | FLOAT | degrés | Longitude géographique |
+| `timestamp_utc` | TEXT | ISO 8601 | Horodatage UTC (ex: `2026-07-29T16:00:00Z`) |
+| `date` | TEXT | YYYY-MM-DD | Date seule |
+| `heure` | INT | [0,23] | Heure du jour (UTC) |
+| `jour_semaine` | TEXT | — | Jour en anglais (`Monday`, `Tuesday`, …) |
+| `is_weekend` | BOOL | — | `True` si samedi ou dimanche |
+| `aqi` | INT | indice 1–5 | Air Quality Index (1 = bon, 5 = très mauvais) |
+| `co` | FLOAT | μg/m³ | Monoxyde de carbone |
+| `no` | FLOAT | μg/m³ | Monoxyde d’azote |
+| `no2` | FLOAT | μg/m³ | Dioxyde d’azote |
+| `o3` | FLOAT | μg/m³ | Ozone |
+| `so2` | FLOAT | μg/m³ | Dioxyde de soufre |
+| `pm2_5` | FLOAT | μg/m³ | Particules fines ≤ 2.5 μm |
+| `pm10` | FLOAT | μg/m³ | Particules ≤ 10 μm |
+| `nh3` | FLOAT | μg/m³ | Ammoniac |
 
-### Table fact_air_quality
+**Règles** :
+- Valeurs manquantes → cellule vide (pas de `0` ni de `NULL` textuel).
+- Ordre des colonnes strict, tel qu’indiqué ci-dessus.
 
-Table de faits (mesures de polluants et AQI, ~42,000 lignes).
+## Schéma du warehouse
 
-```sql
-CREATE TABLE IF NOT EXISTS fact_air_quality (
-    fact_id SERIAL PRIMARY KEY,
-    city_id INTEGER REFERENCES dim_city(city_id),
-    time_id INTEGER REFERENCES dim_time(time_id),
-    aqi INTEGER,
-    co DOUBLE PRECISION,
-    no DOUBLE PRECISION,
-    no2 DOUBLE PRECISION,
-    o3 DOUBLE PRECISION,
-    so2 DOUBLE PRECISION,
-    pm2_5 DOUBLE PRECISION,
-    pm10 DOUBLE PRECISION,
-    nh3 DOUBLE PRECISION,
-    UNIQUE (city_id, time_id)
-);
-```
+Le warehouse est hébergé sur **PostgreSQL (Aiven)**.
 
-**Exemples de lignes** :
-![alt text](<Screenshot From 2026-07-28 00-08-20.png>)
+![alt text](<Screenshot From 2026-07-27 23-47-44-1.png>)
 
-### Queries Utiles
+## Période couverte
 
-#### Récupérer les dernières mesures pour chaque ville
-
-```sql
-SELECT 
-    c.city_name,
-    c.country,
-    dt.timestamp_hour,
-    faq.aqi,
-    faq.pm2_5,
-    faq.no2
-FROM fact_air_quality faq
-JOIN dim_city c ON faq.city_id = c.city_id
-JOIN dim_time dt ON faq.time_id = dt.time_id
-WHERE (faq.city_id, dt.timestamp_hour) IN (
-    SELECT city_id, MAX(timestamp_hour) 
-    FROM fact_air_quality 
-    JOIN dim_time USING (time_id) 
-    GROUP BY city_id
-)
-ORDER BY c.city_name;
-```
-
-#### AQI moyen par ville et mois
-
-```sql
-SELECT 
-    c.city_name,
-    dt.year,
-    dt.month,
-    ROUND(AVG(faq.aqi), 2) AS aqi_moyen,
-    COUNT(*) AS nb_mesures
-FROM fact_air_quality faq
-JOIN dim_city c ON faq.city_id = c.city_id
-JOIN dim_time dt ON faq.time_id = dt.time_id
-GROUP BY c.city_name, dt.year, dt.month
-ORDER BY c.city_name, dt.year, dt.month;
-```
-
-#### PM2.5 les plus élevées (top 10)
-
-```sql
-SELECT 
-    c.city_name,
-    dt.timestamp_hour,
-    faq.pm2_5,
-    faq.aqi
-FROM fact_air_quality faq
-JOIN dim_city c ON faq.city_id = c.city_id
-JOIN dim_time dt ON faq.time_id = dt.time_id
-WHERE faq.pm2_5 IS NOT NULL
-ORDER BY faq.pm2_5 DESC
-LIMIT 10;
-```
+- **Début** : 26 avril 2026, 04:00 UTC  
+- **Fin** : collecte en cours (dernière mise à jour : 24 juillet 2026, 17:00 UTC)  
+- **Fréquence** : une mesure par heure et par ville (soit 5 × 24 = 120 mesures par jour)  
+- **Volume actuel** : ~42 083 lignes dans le fichier `clean/` (écarts expliqués ci-dessous)
 
 ---
 
-## 🔐 Connexion à la Base de Données
+## Trous connus et données manquantes
 
-### Informations de Connexion
+| Ville | Heures manquantes | Période concernée | Cause |
+|-------|-------------------|-------------------|-------|
+| Antananarivo | ~22 h | 26–27 avril 2026 | Démarrage progressif du backfill |
+| Paris | ~8 h | Dispersées | Indisponibilité temporaire de l’API |
+| Nairobi | ~15 h | Dispersées | Arrêt du pipeline (~1 jour) |
+| New York | ~5 h | Dispersées | Erreurs réseau ponctuelles |
+| Tokyo | ~5 h | Dispersées | Erreurs réseau ponctuelles |
 
-| Paramètre | Valeur | Remarques |
-|---|---|---|
-| **Type de BD** | PostgreSQL | Version 14+ |
-| **Hôte** | `<à configurer en GitHub Secrets>` | Neon.tech ou autre cloud |
-| **Port** | `5432` | Port PostgreSQL standard |
-| **Nom de base** | `neondb` | Ou autre selon config |
-| **Utilisateur** | `<à configurer en GitHub Secrets>` | Compte avec droits INSERT/SELECT |
-| **Mot de passe** | `<à configurer en GitHub Secrets>` | Stocké en GitHub Secrets |
-| **SSL Mode** | `require` | Obligatoire pour la sécurité |
-| **Timeout connexion** | 30s | Connectivité cloud |
+**Colonnes avec valeurs manquantes** :
+- `nh3` : manquant dans ~0,6 % des lignes
+- `co` : manquant dans ~0,03 % des lignes  
+Les autres colonnes sont complètes. Ces lacunes sont conservées (cellules vides) pour ne pas fausser les statistiques.
 
-### Configuration (pour le cours IA1)
+---
 
-Les credentials d'accès au warehouse seront **fournis via email** avant le début du cours.
+## Connexion à la base de données
 
-**Variables GitHub Secrets à configurer** (voir `.github/workflows/daily_airflow.yml`) :
-```yaml
-OPENWEATHER_API_KEY  # Clé API OpenWeather (collect.py)
-DB_PASSWORD          # Mot de passe PostgreSQL
-EMAIL_PASSWORD       # Gmail app password (notifications)
-```
+Les identifiants sont stockés de manière sécurisée dans **GitHub Secrets** et ne sont pas exposés dans le code.  
+Pour accéder au warehouse, utilisez les paramètres suivants (à remplacer par vos valeurs secrètes) :
 
-**Variables GitHub (non-secrètes)** :
-```yaml
-DB_HOST              # Adresse serveur (ex: ep-calm-xyz.neon.tech)
-DB_PORT              # 5432
-DB_NAME              # neondb
-DB_USER              # neondb_user
-EMAIL_USERNAME       # Email Gmail sender
-EMAIL_TO             # Email destinataire alerts
-```
+| Paramètre | Description | Où le trouver |
+|-----------|-------------|---------------|
+| `DB_HOST` | Hôte PostgreSQL (ex: `ep-calm-xyz.neon.tech`) | GitHub Variable |
+| `DB_PORT` | Port (par défaut `5432`) | Fixe |
+| `DB_NAME` | Nom de la base (ex: `neondb`) | GitHub Variable |
+| `DB_USER` | Utilisateur | GitHub Variable |
+| `DB_PASSWORD` | Mot de passe | GitHub Secret |
+| `SSL Mode` | `require` | Obligatoire |
 
-### Test de Connexion
-
-```bash
-# En local (après configurer .env)
-psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c "SELECT COUNT(*) FROM fact_air_quality;"
-
-# Via Python
-import psycopg2
-from dotenv import load_dotenv
-import os
-
-load_dotenv()
+**Exemple de connexion Python** :
+```python
+import os, psycopg2
 conn = psycopg2.connect(
     host=os.getenv("DB_HOST"),
+    port=os.getenv("DB_PORT"),
+    database=os.getenv("DB_NAME"),
     user=os.getenv("DB_USER"),
     password=os.getenv("DB_PASSWORD"),
-    database=os.getenv("DB_NAME"),
-    port=os.getenv("DB_PORT"),
     sslmode="require"
 )
-print("✓ Connexion OK")
-conn.close()
 ```
 
 ---
 
-## 🚀 Installation et Utilisation
+## 🛠️ Installation et configuration
 
-### Prérequis
-
-- Python 3.11+
-- Git
-- Accès à GitHub (secrets configurés)
-- Compte Neon.tech (gratuit, pour le warehouse)
-
-### Installation Locale (Dev)
-
+### 1. Cloner le dépôt
 ```bash
-# 1. Cloner le dépôt
-git clone https://github.com/<votre-org>/DONNEE2_High5.git
+git clone https://github.com/nyyanja/DONNEE2_High5.git
 cd DONNEE2_High5
+```
 
-# 2. Créer et activer un venv
+### 2. Créer un environnement virtuel Python
+```bash
 python -m venv venv
-source venv/bin/activate  # Linux/macOS
+source venv/bin/activate          # Linux/macOS
 # ou
-venv\Scripts\activate  # Windows
+venv\Scripts\activate             # Windows
+```
 
-# 3. Installer les dépendances
+### 3. Installer les dépendances
+```bash
 pip install -r requirements.txt
+```
 
-# 4. Configurer .env (local dev)
-cat > .env << EOF
-OPENWEATHER_API_KEY=<your-key>
-DB_HOST=<neon-host>
+### 4. Configurer les variables d’environnement
+Copier le fichier `.env.example` en `.env` et renseigner vos clés :
+```bash
+cp .env.example .env
+```
+Contenu type :
+```ini
+OPENWEATHER_API_KEY=votre_cle_api
+DB_HOST=ep-calm-xyz.neon.tech
 DB_PORT=5432
 DB_NAME=neondb
-DB_USER=<user>
-DB_PASSWORD=<password>
-EOF
+DB_USER=neondb_user
+DB_PASSWORD=votre_mot_de_passe
+```
+> **Note** : Ne jamais committer le fichier `.env` (déjà dans `.gitignore`).
 
-# 5. Tester la collecte
-python src/collect.py
-
-# 6. Tester le nettoyage
-python src/clean.py
-
-# 7. Valider
-python src/validate_clean.py
-
-# 8. Charger
-python src/load_warehouse.py
+### 5. Initialiser le warehouse (créer les tables)
+```bash
+psql -h $DB_HOST -U $DB_USER -d $DB_NAME -f sql/create_schema.sql
 ```
 
-### Utilisation en Production (GitHub Actions)
+---
 
-Le pipeline s'exécute **automatiquement** :
-- **Chaque heure** : `collect.py` + `clean.py` + `validate_clean.py` + `load_warehouse.py`
-- **1x/jour** : `backfill.py` (remplissage historique)
-- **Manuellement** : Via GitHub Actions "Run workflow"
+## 🚀 Utilisation locale
 
-Pour vérifier les logs : GitHub → Actions → Cliquer sur l'exécution récente.
+### Collecte manuelle d’une heure
+```bash
+python src/collect.py
+```
+Les fichiers JSON apparaîtront dans `raw/`.
+
+### Backfill historique (3 mois minimum)
+```bash
+python src/backfill.py --months 3
+```
+
+### Nettoyage et génération du CSV
+```bash
+python src/clean.py
+```
+Le fichier `clean/air_quality_clean.csv` est créé (écrasé à chaque exécution).
+
+### Validation du CSV
+```bash
+python src/validate_clean.py
+```
+Si la validation échoue, le code de sortie est `1` et le chargement ne doit pas être effectué.
+
+### Chargement dans le warehouse
+```bash
+python src/load_warehouse.py
+```
+Insère les données dans les tables `dim_city`, `dim_time` et `fact_air_quality`.
+
+### Exécuter tout le pipeline en local
+```bash
+bash scripts/run_pipeline_local.sh   # (si vous créez ce script)
+```
+Ou manuellement les étapes ci-dessus.
 
 ---
 
-## 📈 Statistiques du Projet
+## Explorer les données
 
-| Métrique | Valeur |
-|---|---|
-| **Nombre de villes** | 5 |
-| **Nombre de colonnes clean/** | 18 |
-| **Nombre de lignes clean/** | ~42,000 |
-| **Nombre d'appels API collectés** | ~12,000 (24h × 5 villes × 90j + backfill) |
-| **Uptime du pipeline** | ~98% (erreurs réseau ponctuelles) |
-| **Taille du dépôt Git** | ~15 MB (fichiers JSON + CSV) |
-| **Taille du warehouse** | ~5 MB (PostgreSQL) |
-| **Coût estimé** | $0 (GitHub Actions gratuit + Neon free tier) |
+### Requêtes SQL utiles (exécutez-les via `psql` ou un client SQL)
+
+**Nombre total de mesures par ville :**
+```sql
+SELECT c.city_name, COUNT(*) AS nb_mesures
+FROM fact_air_quality f
+JOIN dim_city c ON f.city_id = c.city_id
+GROUP BY c.city_name
+ORDER BY nb_mesures DESC;
+```
+
+**AQI moyen journalier (sur la dernière semaine) :**
+```sql
+SELECT c.city_name, dt.date_value, ROUND(AVG(f.aqi), 2) AS aqi_moyen
+FROM fact_air_quality f
+JOIN dim_city c ON f.city_id = c.city_id
+JOIN dim_time dt ON f.time_id = dt.time_id
+WHERE dt.date_value >= CURRENT_DATE - INTERVAL '7 days'
+GROUP BY c.city_name, dt.date_value
+ORDER BY dt.date_value DESC, c.city_name;
+```
+
+**Top 5 des heures les plus polluées (PM2.5) :**
+```sql
+SELECT c.city_name, dt.timestamp_hour, f.pm2_5
+FROM fact_air_quality f
+JOIN dim_city c ON f.city_id = c.city_id
+JOIN dim_time dt ON f.time_id = dt.time_id
+WHERE f.pm2_5 IS NOT NULL
+ORDER BY f.pm2_5 DESC
+LIMIT 5;
+```
 
 ---
 
-## 📚 Ressources et Liens
+## Monitoring du pipeline en production
 
-- **Documentation OpenWeather Air Pollution API** : https://openweathermap.org/api/air-pollution
-- **PostgreSQL Documentation** : https://www.postgresql.org/docs/
-- **GitHub Actions Docs** : https://docs.github.com/actions
-- **Neon Cloud** : https://neon.tech (free tier)
-- **Architecture détaillée** : Voir [ARCHITECTURE.md](ARCHITECTURE.md)
+Le pipeline tourne sur **GitHub Actions** :
+- Accéder à l’onglet **Actions** du dépôt.
+- Voir le workflow `daily_airflow.yml` pour l’exécution horaire.
+- Les logs de chaque job sont consultables.
+- En cas d’échec, une notification email est envoyée (si configurée).
+
+![alt text](<Screenshot From 2026-07-27 23-46-20.png>)
+
+---
+
+Voici la section **Ressources** enrichie avec le rôle de l’IA dans le projet :
+
+---
+
+## 📚 Ressources
+
+### Documentation des outils utilisés
+- [OpenWeather Air Pollution API](https://openweathermap.org/api/air-pollution) – documentation de l’API source.
+- [PostgreSQL](https://www.postgresql.org/docs/) – base de données relationnelle.
+- [GitHub Actions](https://docs.github.com/en/actions) – orchestration et CI/CD.
+- [Python psycopg2](https://www.psycopg.org/docs/) – connecteur PostgreSQL.
+
+### Tutoriels recommandés
+- [Créer un pipeline ETL avec Python et PostgreSQL](https://realpython.com/python-etl/)
+- [Introduction à la modélisation en étoile](https://www.kimballgroup.com/data-warehouse-business-intelligence-resources/kimball-techniques/dimensional-modeling-techniques/star-schema/)
+- [GitHub Actions pour débutants](https://docs.github.com/en/actions/learn-github-actions/understanding-github-actions)
+
+### Articles liés au projet
+- [Pourquoi surveiller la qualité de l’air ?](https://www.who.int/health-topics/air-pollution)
+- [Indice AQI – signification des niveaux](https://www.airnow.gov/aqi/aqi-basics/)
+
+---
+
+### Rôle de l’IA dans ce projet
+
+L’intelligence artificielle (via des assistants comme GitHub Copilot ou des modèles de langage) a été utilisée comme **outil d’aide à la conception et au développement**, sans se substituer à l’expertise des membres de l’équipe. Voici ses principales contributions :
+
+- **Documentation** : génération de premières versions de la documentation technique (README, ARCHITECTURE.md), rédaction des descriptions de colonnes et des schémas, structuration des fichiers markdown.
+- **Explication des concepts** : clarification des notions de modélisation dimensionnelle (étoile vs flocon), des mécanismes d’ETL, des bonnes pratiques de validation de données, et des particularités de l’API OpenWeather.
+- **Revue de code** : suggestion d’améliorations de syntaxe, de performance et de lisibilité sur les scripts Python (gestion des retries, normalisation des coordonnées, déduplication, etc.).
+- **Débogage** : identification rapide d’erreurs courantes (ex : URL incorrecte, parsing JSON, problèmes de type, gestion des valeurs manquantes) et propositions de correctifs, facilitant l’itération et réduisant le temps de résolution.
+
+L’IA a agi comme un **assistant augmentant la productivité** de l’équipe, mais chaque décision finale (choix technologiques, architecture, validation des données) a été prise et validée par les membres humains du projet.
+
