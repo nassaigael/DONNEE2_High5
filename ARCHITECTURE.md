@@ -164,32 +164,7 @@ Valeurs manquantes = cellules vides (pas de 0 inventé, pas de suppression de li
 Le warehouse suit un **schéma dimensionnel en étoile** (Kimball) pour optimiser l'analytique.
 
 ```
-                    dim_city
-                  ┌─────────┐
-                  │ city_id │
-                  │  city   │
-                  │country  │
-                  │lat, lon │
-                  └────┬────┘
-                       │
-    ┌──────────────────┼──────────────────┐
-    │                  │                  │
-    │                  ▼                  │
-    │          fact_air_quality           │
-    │          (fact table)               │
-    │    city_id (FK) | time_id (FK)     │
-    │    aqi, co, no, no2, o3, so2 …      │
-    │                  │                  │
-    │                  ▼                  │
-    │              dim_time               │
-    │           ┌────────────┐            │
-    │           │  time_id   │            │
-    │           │ timestamp  │            │
-    │           │ year, month│            │
-    │           │ hour, day  │            │
-    │           │ is_weekend │            │
-    │           └────────────┘            │
-    └──────────────────────────────────────┘
+ ![alt text](<Screenshot From 2026-07-27 23-47-44-1.png>)
 
 Contraintes:
 - fact_air_quality.city_id (FK) → dim_city.city_id
