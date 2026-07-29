@@ -99,7 +99,7 @@ jobs:
           username: ${{ vars.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
           subject: "[GitHub Actions] ÉCHEC du Pipeline ETL"
-          to: ${{ secrerts.EMAIL_TO }}
+          to: ${{ secrets.EMAIL_TO }}
           from: GitHub Actions Pipeline
           body: |
             Une erreur est survenue lors de l'exécution du pipeline ETL.
