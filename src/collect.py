@@ -1,17 +1,3 @@
-"""
-collect.py — Collecte horaire de la qualité de l'air (AQI) pour 5 villes
-via l'API OpenWeather Air Pollution.
-
-Chaque appel est sauvegardé tel quel (jamais modifié) dans raw/,
-un fichier par ville et par appel. C'est la source de vérité du pipeline.
-
-Auteur : Mahery (deep-awak) – Projet DONNEE2_High5
-
-Usage:
-    export OPENWEATHER_API_KEY=xxxx
-    python src/collect.py
-"""
-
 import os
 import json
 import requests
@@ -42,7 +28,6 @@ VILLES = [
 
 
 def fetch_with_retry(url, params, max_retries=MAX_RETRIES):
-    """Appelle l'API avec retry en cas d'erreur réseau ou de code HTTP 5xx."""
     last_error = None
     for attempt in range(1, max_retries + 1):
         try:

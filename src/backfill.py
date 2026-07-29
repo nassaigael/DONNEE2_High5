@@ -1,23 +1,3 @@
-"""
-backfill.py — Remplissage historique de raw/ via l'API OpenWeather Air Pollution History.
-
-Pour chaque ville et chaque heure disponible, écrit un fichier JSON dans raw/
-au même format que collect.py (une mesure par fichier, avec _meta).
-
-Le script est rejouable : les fichiers déjà présents sont ignorés.
-En cas d'échec partiel (ex. erreur serveur), le script termine normalement
-après avoir récupéré tout ce qui était possible. Les chunks manquants
-seront retentés au prochain run.
-
-
-Usage:
-    export OPENWEATHER_API_KEY=xxxx
-    python src/backfill.py                  # 3 mois, toutes les villes
-    python src/backfill.py --months 12      # 12 mois
-    python src/backfill.py --city Paris     # une seule ville (test)
-    python src/backfill.py --days 1 --city Paris
-"""
-
 import argparse
 import json
 import os
@@ -36,7 +16,7 @@ if not API_KEY:
 
 HISTORY_URL = "https://api.openweathermap.org/data/2.5/air_pollution/history"
 CHUNK_DAYS = 5
-REQUEST_DELAY_SECONDS = 1.2  # respecte les limites du plan gratuit
+REQUEST_DELAY_SECONDS = 1.2
 
 
 def ville_slug(nom: str) -> str:
@@ -44,7 +24,6 @@ def ville_slug(nom: str) -> str:
 
 
 def dt_to_filename(dt_unix: int) -> str:
-    """Timestamp de mesure API → suffixe de fichier déterministe."""
     return datetime.fromtimestamp(dt_unix, tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
@@ -53,14 +32,12 @@ def raw_path(ville_nom: str, dt_unix: int) -> str:
 
 
 def normalize_coord(coord) -> dict:
-    """L'API history renvoie [lon, lat], le current renvoie {lon, lat}."""
     if isinstance(coord, dict):
         return {"lon": coord["lon"], "lat": coord["lat"]}
     return {"lon": coord[0], "lat": coord[1]}
 
 
 def build_record(coord: dict, hour_data: dict, ville: dict, backfilled_at: str) -> dict:
-    """Un fichier = une heure, même structure que collect.py."""
     return {
         "coord": coord,
         "list": [hour_data],
@@ -94,7 +71,6 @@ def fetch_history_chunk(ville: dict, start_ts: int, end_ts: int) -> dict:
 
 
 def iter_chunks(start: datetime, end: datetime, chunk_days: int):
-    """Découpe [start, end] en fenêtres de chunk_days jours."""
     cursor = start
     delta = timedelta(days=chunk_days)
     while cursor < end:
@@ -104,9 +80,6 @@ def iter_chunks(start: datetime, end: datetime, chunk_days: int):
 
 
 def backfill_city(ville: dict, start: datetime, end: datetime) -> tuple[int, int, int]:
-    """
-    Retourne (saved, skipped, failed) pour une ville.
-    """
     saved, skipped, failed = 0, 0, 0
     backfilled_at = datetime.now(timezone.utc).isoformat()
 

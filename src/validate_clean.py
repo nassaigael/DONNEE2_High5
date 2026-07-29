@@ -1,30 +1,3 @@
-"""
-validate_clean.py — Vérifie que clean/air_quality_clean.csv respecte le
-contrat de données du projet.
-
-Contrôles bloquants (exit code 1 si un seul échoue) :
-  1. Le fichier existe et n'est pas vide
-  2. Les colonnes sont exactement celles attendues, dans l'ordre
-  3. Aucun doublon (même ville + même timestamp_utc)
-  4. Tri chronologique respecté (ville, puis timestamp_utc croissant)
-  5. Au moins 5 villes distinctes
-  6. Types et plages de valeurs cohérents :
-       - latitude in [-90, 90], longitude in [-180, 180]
-       - heure in [0, 23]
-       - is_weekend in {True, False}
-       - aqi in [1, 5] ou vide
-       - polluants >= 0 ou vide
-       - timestamp_utc parseable en ISO 8601 UTC (YYYY-MM-DDTHH:MM:SSZ)
-
-Avertissements (n'empêchent pas la validation, juste affichés) :
-  - Valeurs manquantes par colonne
-  - Trous horaires par ville (heures attendues vs heures présentes)
-
-Usage:
-    python src/validate_clean.py
-    python src/validate_clean.py --csv clean/air_quality_clean.csv
-"""
-
 import argparse
 import csv
 import os
@@ -145,7 +118,7 @@ def check_field(value: str, allow_empty: bool, checker, label: str, row_idx: int
 def check_types_and_ranges(rows: list[dict], report: ValidationReport) -> dict:
     missing_counts = {col: 0 for col in EXPECTED_COLUMNS}
 
-    for i, row in enumerate(rows, start=2):  # +2 : ligne 1 = header, index humain
+    for i, row in enumerate(rows, start=2):
         for col in EXPECTED_COLUMNS:
             if row.get(col, "") == "":
                 missing_counts[col] += 1
@@ -169,7 +142,6 @@ def check_types_and_ranges(rows: list[dict], report: ValidationReport) -> dict:
 
 
 def check_hourly_coverage(rows: list[dict], report: ValidationReport) -> None:
-    """Avertissement (non bloquant) : signale les trous horaires par ville."""
     by_ville: dict[str, list[datetime]] = {}
     for row in rows:
         ts = parse_timestamp(row["timestamp_utc"])

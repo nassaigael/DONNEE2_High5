@@ -3,9 +3,6 @@ from psycopg2.extras import execute_values
 
 
 def insert_city(city, conn=None):
-    """
-    Insère une ville si elle n'existe pas déjà.
-    """
     close_conn = False
     if conn is None:
         conn = get_connection()
@@ -30,10 +27,6 @@ def insert_city(city, conn=None):
 
 
 def get_city_id(city_name, conn=None):
-    """
-    Récupère le city_id correspondant au nom de la ville.
-    Renvoie None si introuvable.
-    """
     close_conn = False
     if conn is None:
         conn = get_connection()
@@ -54,10 +47,6 @@ def get_city_id(city_name, conn=None):
 
 
 def insert_time(time_data, conn=None):
-    """
-    Insère un timestamp dans dim_time et retourne systématiquement le time_id.
-    Utilise un UPSERT factice pour garantir un retour direct sans faire 2 requêtes.
-    """
     close_conn = False
     if conn is None:
         conn = get_connection()
@@ -92,9 +81,6 @@ def insert_time(time_data, conn=None):
 
 
 def get_time_id(timestamp, conn=None):
-    """
-    Récupère le time_id via le timestamp.
-    """
     close_conn = False
     if conn is None:
         conn = get_connection()
@@ -116,9 +102,6 @@ def get_time_id(timestamp, conn=None):
 
 
 def insert_fact(fact, conn=None):
-    """
-    Insère une mesure individuelle dans la table de faits.
-    """
     close_conn = False
     if conn is None:
         conn = get_connection()
@@ -152,9 +135,6 @@ def insert_fact(fact, conn=None):
 
 
 def insert_facts_batch(facts, conn=None):
-    """
-    Insère un lot de mesures (recommandé pour les performances).
-    """
     close_conn = False
     if conn is None:
         conn = get_connection()

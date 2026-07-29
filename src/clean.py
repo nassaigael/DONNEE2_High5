@@ -1,24 +1,3 @@
-"""
-clean.py — Reconstruction de clean/ à partir de raw/ (jamais l'inverse).
-
-Lit TOUS les fichiers JSON de raw/ (un fichier = un appel API = une mesure,
-produit par collect.py ou backfill.py), et reconstruit un unique CSV propre :
-    - une ligne par (ville, heure)
-    - triée chronologiquement (ville, puis timestamp)
-    - sans doublons : si une même heure a été collectée plusieurs fois
-      (chevauchement collect.py / backfill.py), on garde la mesure dont
-      _meta.collected_at est la plus récente
-    - valeurs manquantes : un polluant absent ou null dans components est
-      exporté comme cellule vide (pas de 0 inventé, pas de suppression de ligne)
-
-clean/ est entièrement reconstruit à chaque exécution : ce script ne lit
-jamais clean/ et n'ajoute jamais à un fichier existant, il l'écrase.
-
-Usage:
-    python src/clean.py
-    python src/clean.py --raw-dir raw --out clean/air_quality_clean.csv
-"""
-
 import argparse
 import csv
 import glob
@@ -26,9 +5,6 @@ import json
 import os
 from datetime import datetime, timezone
 
-# Colonnes du contrat de données clean/ (README du stockage).
-# Unités : aqi = indice OpenWeather (1..5) ; polluants en µg/m3 (co en µg/m3
-# également, cf. doc OpenWeather Air Pollution API).
 POLLUTANTS = ["co", "no", "no2", "o3", "so2", "pm2_5", "pm10", "nh3"]
 
 FIELDNAMES = [
@@ -43,11 +19,6 @@ def ville_slug(nom: str) -> str:
 
 
 def parse_record(filepath: str) -> dict | None:
-    """
-    Extrait une ligne exploitable d'un fichier raw/, ou None si le fichier
-    est inexploitable (JSON invalide, pas de mesure, métadonnées absentes).
-    Ne modifie jamais le fichier source.
-    """
     try:
         with open(filepath, encoding="utf-8") as f:
             data = json.load(f)
@@ -62,15 +33,9 @@ def parse_record(filepath: str) -> dict | None:
 
     entries = data.get("list") or []
     if not entries:
-        # Réponse API vide (ex: erreur ou plage horaire sans donnée) : on
-        # garde une trace mais on ne fabrique pas de ligne.
         print(f"  IGNORE (list vide) {filepath}")
         return None
 
-    # collect.py écrit une seule mesure par fichier (list[0]) ; backfill.py
-    # aussi (un fichier par heure). On ne traite que la première entrée,
-    # mais on boucle quand même pour rester compatible si un fichier
-    # contenait plusieurs heures.
     rows = []
     for entry in entries:
         dt_unix = entry.get("dt")
@@ -91,14 +56,13 @@ def parse_record(filepath: str) -> dict | None:
             "date": ts.strftime("%Y-%m-%d"),
             "heure": ts.hour,
             "jour_semaine": ts.strftime("%A"),
-            "is_weekend": ts.weekday() >= 5,  # 5=samedi, 6=dimanche
+            "is_weekend": ts.weekday() >= 5,
             "aqi": main.get("aqi", ""),
         }
         for pol in POLLUTANTS:
             val = components.get(pol)
             row[pol] = "" if val is None else val
 
-        # clé de dédup + départage en cas de doublon
         row["_dedup_key"] = (ville_slug(meta["ville"]), dt_unix)
         row["_collected_at"] = meta.get("collected_at", "")
 
@@ -125,11 +89,6 @@ def load_all_raw(raw_dir: str) -> list[dict]:
 
 
 def deduplicate(rows: list[dict]) -> list[dict]:
-    """
-    Une seule ligne par (ville, heure). En cas de doublon (collect.py et
-    backfill.py ont pu couvrir la même heure), on garde la mesure la plus
-    récemment collectée (_meta.collected_at le plus grand).
-    """
     best_by_key: dict[tuple, dict] = {}
     duplicates = 0
 
@@ -148,7 +107,6 @@ def deduplicate(rows: list[dict]) -> list[dict]:
 
 
 def sort_rows(rows: list[dict]) -> list[dict]:
-    """Tri chronologique : ville puis timestamp croissant."""
     return sorted(rows, key=lambda r: (ville_slug(r["ville"]), r["timestamp_utc"]))
 
 
