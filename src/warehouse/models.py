@@ -1,4 +1,5 @@
 from warehouse.db import get_connection
+from psycopg2.extras import execute_values
 
 
 def insert_city(city, conn=None):
@@ -165,10 +166,10 @@ def insert_facts_batch(facts, conn=None):
                 INSERT INTO fact_air_quality (
                     city_id, time_id, aqi, co, no, no2, o3, so2, pm2_5, pm10, nh3
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES %s
                 ON CONFLICT (city_id, time_id) DO NOTHING;
             """
-            cur.executemany(sql, facts)
+            execute_values(cur, sql, facts, page_size=1000)
             conn.commit()
     finally:
         if close_conn:
