@@ -15,7 +15,7 @@ Il fournit un flux de données **fiable, traçable et prêt à l’emploi** pour
 
 Le flux de données s’articule en quatre étapes, orchestrées automatiquement toutes les heures via GitHub Actions :
 
-![alt text](<Screenshot From 2026-07-28 00-34-15.png>)
+![alt text](<Capture d’écran_2026-07-29_22-12-05.png>)
 
 1. **Extraction** – `collect.py`  
    Interroge l’API OpenWeather Air Pollution pour chaque ville et enregistre la réponse brute (JSON) dans le dossier `raw/`. Un backfill quotidien (`backfill.py`) comble les trous historiques.
@@ -75,16 +75,17 @@ Chaque ligne représente une mesure horaire unique.
 
 ## Schéma du warehouse
 
-Le warehouse est hébergé sur **PostgreSQL (Aiven)**.
+Le warehouse est hébergé sur **PostgreSQL (Neon)**, un service serverless avec pooling de connexions et scaling automatique.
 
-![alt text](<Screenshot From 2026-07-27 23-47-44-1.png>)
+![alt text](<Capture d’écran_2026-07-30_07-11-17.png>)
+![alt text](<Capture d’écran_2026-07-30_07-11-25.png>)
 
 ## Période couverte
 
 - **Début** : 26 avril 2026, 04:00 UTC  
-- **Fin** : collecte en cours (dernière mise à jour : 24 juillet 2026, 17:00 UTC)  
+- **Fin** : collecte en cours (dernière mise à jour : 29 juillet 2026, 22:00 UTC)  
 - **Fréquence** : une mesure par heure et par ville (soit 5 × 24 = 120 mesures par jour)  
-- **Volume actuel** : ~42 083 lignes dans le fichier `clean/` (écarts expliqués ci-dessous)
+- **Volume actuel** : ~11 000 lignes dans la table `fact_air_quality` (écarts expliqués ci-dessous)
 
 ---
 
@@ -112,7 +113,7 @@ Pour accéder au warehouse, utilisez les paramètres suivants (à remplacer par 
 
 | Paramètre | Description | Où le trouver |
 |-----------|-------------|---------------|
-| `DB_HOST` | Hôte PostgreSQL (ex: `ep-calm-xyz.neon.tech`) | GitHub Variable |
+| `DB_HOST` | Hôte PostgreSQL (ex: `ep-noisy-pond-zaviipgj-pooler.c-2.eu-west-2.aws.neon.tech`) | GitHub Variable |
 | `DB_PORT` | Port (par défaut `5432`) | Fixe |
 | `DB_NAME` | Nom de la base (ex: `neondb`) | GitHub Variable |
 | `DB_USER` | Utilisateur | GitHub Variable |
@@ -163,7 +164,7 @@ cp .env.example .env
 Contenu type :
 ```ini
 OPENWEATHER_API_KEY=votre_cle_api
-DB_HOST=ep-calm-xyz.neon.tech
+DB_HOST=ep-noisy-pond-zaviipgj-pooler.c-2.eu-west-2.aws.neon.tech
 DB_PORT=5432
 DB_NAME=neondb
 DB_USER=neondb_user
