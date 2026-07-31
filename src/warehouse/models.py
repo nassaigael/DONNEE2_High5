@@ -154,3 +154,48 @@ def insert_facts_batch(facts, conn=None):
     finally:
         if close_conn:
             conn.close()
+
+def insert_times_batch(times, conn=None):
+    close_conn = False
+    if conn is None:
+        conn = get_connection()
+        close_conn = True
+
+    try:
+        with conn.cursor() as cur:
+            sql = """
+                INSERT INTO dim_time (
+                    timestamp_hour, date_value, year, month, day, hour, day_of_week, is_weekend
+                )
+                VALUES %s
+                ON CONFLICT (timestamp_hour) DO NOTHING;
+            """
+            values = [
+                (t["timestamp"], t["date"], t["year"], t["month"],
+                 t["day"], t["hour"], t["day_of_week"], t["is_weekend"])
+                for t in times
+            ]
+            execute_values(cur, sql, values, page_size=1000)
+            conn.commit()
+    finally:
+        if close_conn:
+            conn.close()
+
+
+def get_time_id_map(timestamps, conn=None):
+    close_conn = False
+    if conn is None:
+        conn = get_connection()
+        close_conn = True
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT time_id, timestamp_hour FROM dim_time WHERE timestamp_hour = ANY(%s);",
+                (timestamps,)
+            )
+            rows = cur.fetchall()
+            return {ts: tid for tid, ts in rows}
+    finally:
+        if close_conn:
+            conn.close()

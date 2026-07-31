@@ -5,8 +5,8 @@ from warehouse.db import get_connection
 from warehouse.models import (
     insert_city,
     get_city_id,
-    insert_time,
-    get_time_id,
+    insert_times_batch,
+    get_time_id_map,
     insert_facts_batch
 )
 
@@ -40,12 +40,12 @@ def main():
                 if ville_nom not in city_id_map:
                     city_id_map[ville_nom] = get_city_id(ville_nom, conn)
 
-            times_done = set()
+            times_done = {}
             for row in rows:
                 timestamp_str = row["timestamp_utc"]
                 if timestamp_str not in times_done:
                     timestamp = datetime.strptime(timestamp_str, "%Y-%m-%dT%H:%M:%SZ")
-                    time_data = {
+                    times_done[timestamp_str] = {
                         "timestamp": timestamp,
                         "date": row["date"],
                         "year": timestamp.year,
@@ -55,15 +55,15 @@ def main():
                         "day_of_week": row["jour_semaine"],
                         "is_weekend": row["is_weekend"] == "True"
                     }
-                    insert_time(time_data, conn)
-                    times_done.add(timestamp_str)
 
-            time_id_map = {}
-            for row in rows:
-                timestamp_str = row["timestamp_utc"]
-                if timestamp_str not in time_id_map:
-                    timestamp = datetime.strptime(timestamp_str, "%Y-%m-%dT%H:%M:%SZ")
-                    time_id_map[timestamp_str] = get_time_id(timestamp, conn)
+            insert_times_batch(list(times_done.values()), conn)
+
+            all_timestamps = [t["timestamp"] for t in times_done.values()]
+            time_id_by_ts = get_time_id_map(all_timestamps, conn)
+            time_id_map = {
+                ts_str: time_id_by_ts[t["timestamp"]]
+                for ts_str, t in times_done.items()
+            }
 
             facts = []
             for row in rows:
