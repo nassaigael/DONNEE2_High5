@@ -1,37 +1,30 @@
 name: Air Quality ETL Pipeline
-
 on:
   push:
     branches: ['main']
   schedule:
     - cron: '0 * * * *'
   workflow_dispatch:
-
 jobs:
   run-pipeline:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     permissions:
       contents: write 
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
-
       - name: Install dependencies
         run: pip install -r requirements.txt
-
       - name: Collect real-time data
         env:
           OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
         run: python src/collect.py
-
       - name: Check if backfill needed today
         id: check_backfill
         run: |
@@ -42,7 +35,6 @@ jobs:
           else
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
-
       - name: Backfill historical data
         if: steps.check_backfill.outputs.skip != 'true'
         env:
@@ -50,13 +42,10 @@ jobs:
         run: |
           python src/backfill.py --months 3
           date +%Y-%m-%d > last_backfill_date.txt
-
       - name: Clean and normalize data
         run: python src/clean.py
-
       - name: Validate clean dataset
         run: python src/validate_clean.py
-
       - name: Load into warehouse DB1
         env:
           DB_HOST: ${{ vars.DB_HOST }}
@@ -65,7 +54,6 @@ jobs:
           DB_USER: ${{ vars.DB_USER }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
         run: python src/load_warehouse.py
-
       - name: Load into warehouse DB2
         env:
           DB_HOST: ${{ vars.DB_HOST_2 }}
@@ -74,7 +62,6 @@ jobs:
           DB_USER: ${{ vars.DB_USER_2 }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD_2 }}
         run: python src/load_warehouse.py
-
       - name: Commit and push updated data files
         run: |
           git config user.name "deep-awak"
@@ -82,7 +69,6 @@ jobs:
           git add raw/ clean/air_quality_clean.csv last_backfill_date.txt
           git diff --staged --quiet || git commit -m "data: automated collection $(date +%Y-%m-%d_%H:%M)"
           git push
-
       - name: Send success email notification
         if: success()
         uses: dawidd6/action-send-mail@v4
@@ -100,7 +86,6 @@ jobs:
             Branche : ${{ github.ref_name }}
             Commit : ${{ github.sha }}
             Logs : https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
       - name: Send failure email notification
         if: failure()
         uses: dawidd6/action-send-mail@v4
@@ -110,7 +95,7 @@ jobs:
           username: ${{ vars.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
           subject: "[GitHub Actions] ÉCHEC du Pipeline ETL"
-          to: ${{ secrets.EMAIL_TO }}
+          to: ${{ vars.EMAIL_TO }}
           from: GitHub Actions Pipeline
           body: |
             Une erreur est survenue lors de l'exécution du pipeline ETL.
