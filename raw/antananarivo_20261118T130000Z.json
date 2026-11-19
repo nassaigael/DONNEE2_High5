@@ -1,0 +1,33 @@
+{
+  "coord": {
+    "lon": 47.5079,
+    "lat": -18.8792
+  },
+  "list": [
+    {
+      "main": {
+        "aqi": 1
+      },
+      "components": {
+        "co": 103.08,
+        "no": 0,
+        "no2": 0.13,
+        "o3": 38,
+        "so2": 0.07,
+        "pm2_5": 0.78,
+        "pm10": 1.1,
+        "nh3": 0.62
+      },
+      "dt": 1795006800
+    }
+  ],
+  "_meta": {
+    "ville": "Antananarivo",
+    "pays": "MG",
+    "lat": -18.8792,
+    "lon": 47.5079,
+    "collected_at": "2026-11-19T00:06:32.239701+00:00",
+    "source": "backfill",
+    "measurement_dt": 1795006800
+  }
+}
